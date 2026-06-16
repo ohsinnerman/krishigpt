@@ -1,0 +1,23 @@
+# Secrets
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# RAG artifacts (large; rebuild with scripts/build_index.py)
+backend/data/faiss.index
+backend/data/chunks.pkl
+backend/data/corpus/
+backend/data/pincodes.csv
+
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+.DS_Store
+
+# Eval outputs
+backend/data/eval/results*.jsonl
