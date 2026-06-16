@@ -81,7 +81,18 @@ async def chat(req: ChatRequest, request: Request):
         result["latency_ms"] = int((time.monotonic() - t0) * 1000)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the real traceback so demo-time failures are diagnosable, but
+        # return a friendly fallback (200) instead of a raw 500 to the user.
+        import traceback
+        traceback.print_exc()
+        return {
+            "response": "Sorry, I'm having trouble answering right now. Please try again in a moment.",
+            "sources": [],
+            "region": None,
+            "language": req.language,
+            "latency_ms": int((time.monotonic() - t0) * 1000),
+            "cache_hit": False,
+        }
 
 
 @app.get("/health")

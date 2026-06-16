@@ -97,6 +97,22 @@ curl http://localhost:8000/pincode/600001
 
 ---
 
+## Fixes applied after first manual run (checkpoint 2b)
+
+- **Cold-start 500 fixed.** The first `/chat` used to race the lazy embedding-model load and
+  500. Pipeline now **warms up the embedder at startup** (`pipeline.__init__`). Also, `/chat`
+  now returns a friendly fallback (HTTP 200) and prints the traceback to the server log instead
+  of a raw 500 — so a demo-time hiccup never shows an error page.
+- **Prompt rewritten for grounded, official-sounding answers** (`backend/rag/generator.py`):
+  - Answers are drawn from the provided documents and **attributed** ("As per the ICAR Package
+    of Practices for the region...") so they look legit to a jury.
+  - The model now **answers confidently from the files first**; the "contact your local KVK"
+    line is a RARE fallback that triggers ONLY when the documents genuinely lack the info
+    (verified: in-corpus questions answer fully; a live market-price question correctly defers).
+- **`RAG_TOP_K` 5 → 8** in `backend/.env` for better recall (each state has only 2–4 chunks, so
+  a larger top_k lets a combined question pull variety + pest + fertilizer chunks together).
+  Verified: "which variety AND how to control stem borer" now answers both parts.
+
 ## §5 — Pending fix before Phase 4 eval (so the number is honest)
 `scripts/evaluate.py`'s faithfulness proxy currently compares the answer against source **titles**
 only, which is too thin to measure grounding. Before reporting hallucination numbers, change it to

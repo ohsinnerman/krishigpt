@@ -21,6 +21,14 @@ class KrishiGPTPipeline:
         self.faiss_index, self.chunks = load_index()
         self.redis = None
         self._redis_tried = False
+        # Warm up the embedding model at startup so the FIRST /chat request does
+        # not race the (slow) lazy model download/load and 500.
+        print("Warming up embedding model...")
+        try:
+            from rag.embeddings import embed_query
+            embed_query("warmup")
+        except Exception as e:
+            print(f"WARNING: embedder warmup failed: {e}")
         print(f"Pipeline ready. {len(self.chunks)} chunks loaded.")
 
     async def _get_redis(self):
