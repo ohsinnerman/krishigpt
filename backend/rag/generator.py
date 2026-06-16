@@ -105,15 +105,23 @@ RESPONSE IN {lang_name.upper()}:"""
     return prompt
 
 
+def _build_config(max_tokens: int) -> genai_types.GenerateContentConfig:
+    cfg = dict(max_output_tokens=max_tokens, temperature=0.3, top_p=0.8)
+    # On Gemini 2.5 Flash, "thinking" tokens are billed against the output budget
+    # and can swallow the whole answer. Disable thinking for fast factual replies.
+    # (Field is ignored by models that don't support it.)
+    try:
+        cfg["thinking_config"] = genai_types.ThinkingConfig(thinking_budget=0)
+    except Exception:
+        pass
+    return genai_types.GenerateContentConfig(**cfg)
+
+
 def _call(client, prompt: str, max_tokens: int) -> str:
     response = client.models.generate_content(
         model=_model_name(),
         contents=prompt,
-        config=genai_types.GenerateContentConfig(
-            max_output_tokens=max_tokens,
-            temperature=0.3,
-            top_p=0.8,
-        ),
+        config=_build_config(max_tokens),
     )
     return (response.text or "").strip()
 
