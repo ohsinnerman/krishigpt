@@ -127,11 +127,11 @@ def build_prompt(
 
     if context_chunks:
         context_sections = []
-        for i, chunk in enumerate(context_chunks, 1):
+        for chunk in context_chunks:
+            title = chunk.get("source_title", "Unknown")
+            state = chunk.get("state", "pan-india")
             context_sections.append(
-                f"[Document {i}: {chunk.get('source_title', 'Unknown')}, "
-                f"State: {chunk.get('state', 'pan-india')}]\n"
-                f"{chunk['text']}"
+                f"--- Source: {title} (State: {state}) ---\n{chunk['text']}"
             )
         context = "\n\n".join(context_sections)
     else:
@@ -158,7 +158,8 @@ RESPONSE RULES:
 6. For fertilizer questions: give the specific dose (kg/hectare or kg/acre), timing, and method of application from the documents.
 7. For scheme questions (PMFBY/PMKISAN/KCC): state eligibility, documents needed, and where to apply, exactly as in the documents.
 8. ONLY IF the documents above genuinely do NOT contain anything relevant to the question: briefly say the official documents do not cover this specific point, and suggest contacting the local KVK. Use this fallback RARELY — never when an answer can be drawn from the documents above.
-9. Keep the response to 4-6 sentences. Farmers need brevity.
+9. NEVER mention internal labels like "Document 1", "Document 6", "[Document N]", "the context", or "the passage". Speak directly to the farmer as an advisor. Refer to sources only as the ICAR Package of Practices or official guidelines.
+10. Keep the response to 4-6 sentences. Farmers need brevity.
 
 RESPONSE IN {lang_name.upper()}:"""
 

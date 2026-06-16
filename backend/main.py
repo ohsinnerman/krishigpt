@@ -136,6 +136,13 @@ async def whatsapp_webhook(request: Request):
     return await handle_whatsapp_message(dict(form_data), pipeline)
 
 
+@app.post("/webhook/greenapi")
+async def greenapi_webhook(request: Request):
+    from integrations.greenapi import handle_greenapi_webhook
+    payload = await request.json()
+    return await handle_greenapi_webhook(payload, pipeline)
+
+
 @app.post("/feedback")
 async def feedback(message_id: str, score: int):
     # score: 1 = helpful, -1 = not helpful

@@ -4,19 +4,13 @@
     "n_regional": 16,
     "region_hit5": 0.75,
     "top1_region": 0.562,
-    "mrr_state": 0.664,
-    "n_faithfulness_en": 10,
-    "faithfulness": 0.642,
-    "hallucination_rate": 0.2
+    "mrr_state": 0.664
   },
   "rag_with_region": {
     "n": 20,
     "n_regional": 16,
     "region_hit5": 1.0,
     "top1_region": 1.0,
-    "mrr_state": 1.0,
-    "n_faithfulness_en": 10,
-    "faithfulness": 0.658,
-    "hallucination_rate": 0.0
+    "mrr_state": 1.0
   }
 }
