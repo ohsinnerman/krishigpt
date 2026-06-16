@@ -5,27 +5,87 @@ from google import genai
 from google.genai import types as genai_types
 
 _GENAI_READY = False
-_client = None
+_clients: list = []      # one client per API key
+_active = 0              # index of the key currently in use
 
 
 def _model_name() -> str:
     return os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 
-def _ensure_client():
-    """Lazily build the Gemini client. Returns the client or None if no API key."""
-    global _GENAI_READY, _client
+def _collect_keys() -> list[str]:
+    """Keys from GOOGLE_API_KEYS (comma-separated) plus single GOOGLE_API_KEY,
+    de-duplicated, order preserved."""
+    raw = []
+    raw += [k.strip() for k in os.getenv("GOOGLE_API_KEYS", "").split(",")]
+    raw.append(os.getenv("GOOGLE_API_KEY", "").strip())
+    seen, keys = set(), []
+    for k in raw:
+        if k and k not in seen:
+            seen.add(k)
+            keys.append(k)
+    return keys
+
+
+def _ensure_clients() -> list:
+    """Lazily build one Gemini client per key. Empty list if no keys."""
+    global _GENAI_READY, _clients
     if _GENAI_READY:
-        return _client
-    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
-    if not api_key:
-        print("WARNING: GOOGLE_API_KEY not set. Generator will return a stub response.")
-        _GENAI_READY = True
-        _client = None
-        return None
-    _client = genai.Client(api_key=api_key)
+        return _clients
+    keys = _collect_keys()
+    if not keys:
+        print("WARNING: no Gemini key set (GOOGLE_API_KEY / GOOGLE_API_KEYS). Generator stubs.")
+    else:
+        _clients = [genai.Client(api_key=k) for k in keys]
+        print(f"Gemini ready with {len(_clients)} API key(s); auto-rotates on quota/429.")
     _GENAI_READY = True
-    return _client
+    return _clients
+
+
+def _is_quota_error(e: Exception) -> bool:
+    s = str(e)
+    return "429" in s or "RESOURCE_EXHAUSTED" in s or "quota" in s.lower()
+
+
+# ── Groq fallback (used only when all Gemini keys are exhausted) ──────────────
+_GROQ_READY = False
+_groq_client = None
+
+
+def _groq_model() -> str:
+    return os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+
+def _ensure_groq():
+    """Lazily build a Groq client. Returns it or None if no GROQ_API_KEY."""
+    global _GROQ_READY, _groq_client
+    if _GROQ_READY:
+        return _groq_client
+    key = os.getenv("GROQ_API_KEY", "").strip()
+    if key:
+        try:
+            from groq import Groq
+            _groq_client = Groq(api_key=key)
+            print(f"Groq fallback ready ({_groq_model()}).")
+        except Exception as e:
+            print(f"WARNING: Groq init failed: {e}")
+            _groq_client = None
+    _GROQ_READY = True
+    return _groq_client
+
+
+def _groq_call(prompt: str, max_tokens: int) -> Optional[str]:
+    client = _ensure_groq()
+    if client is None:
+        return None
+    resp = client.chat.completions.create(
+        model=_groq_model(),
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        top_p=0.8,
+        max_tokens=max_tokens,
+    )
+    return (resp.choices[0].message.content or "").strip()
 
 
 LANGUAGE_NAMES = {
@@ -117,13 +177,44 @@ def _build_config(max_tokens: int) -> genai_types.GenerateContentConfig:
     return genai_types.GenerateContentConfig(**cfg)
 
 
-def _call(client, prompt: str, max_tokens: int) -> str:
-    response = client.models.generate_content(
-        model=_model_name(),
-        contents=prompt,
-        config=_build_config(max_tokens),
-    )
-    return (response.text or "").strip()
+def _call(prompt: str, max_tokens: int) -> str:
+    """Generate with provider failover:
+      1. Try each Gemini key (rotate on quota/429).
+      2. If ALL Gemini keys are quota-exhausted, fall over to Groq.
+    """
+    global _active
+    clients = _ensure_clients()
+    quota_hit = False
+    last_err = None
+
+    for attempt in range(len(clients)):
+        idx = (_active + attempt) % len(clients)
+        try:
+            response = clients[idx].models.generate_content(
+                model=_model_name(),
+                contents=prompt,
+                config=_build_config(max_tokens),
+            )
+            _active = idx  # stick with the key that worked
+            return (response.text or "").strip()
+        except Exception as e:
+            last_err = e
+            if _is_quota_error(e):
+                quota_hit = True
+                print(f"  Gemini key #{idx + 1} hit quota; rotating...")
+                continue
+            raise
+
+    # All Gemini keys failed. If it was a quota problem, try Groq.
+    if quota_hit or not clients:
+        groq_text = _groq_call(prompt, max_tokens)
+        if groq_text is not None:
+            print("  -> fell over to Groq.")
+            return groq_text
+
+    if last_err:
+        raise last_err
+    raise RuntimeError("No generation backend available.")
 
 
 async def generate(
@@ -133,23 +224,25 @@ async def generate(
     region: Optional[str],
     max_tokens: int = 500,
 ) -> str:
-    """Generate response using Gemini. Degrades gracefully if no API key."""
-    client = _ensure_client()
+    """Generate via Gemini (primary) with Groq fallback. Degrades to a stub if
+    neither provider has a key set."""
+    clients = _ensure_clients()
+    has_groq = _ensure_groq() is not None
     prompt = build_prompt(question, context_chunks, language, region)
 
-    if client is None:
+    if not clients and not has_groq:
         # Stub: return retrieved context so the rest of the system is testable
         if context_chunks:
             snippet = context_chunks[0]["text"][:300]
-            return f"[Demo mode — no GOOGLE_API_KEY set]\nBased on retrieved docs: {snippet}"
-        return "[Demo mode — no GOOGLE_API_KEY set and no documents retrieved.]"
+            return f"[Demo mode — no Gemini/Groq key set]\nBased on retrieved docs: {snippet}"
+        return "[Demo mode — no Gemini/Groq key set and no documents retrieved.]"
 
-    text = _call(client, prompt, max_tokens)
+    text = _call(prompt, max_tokens)
 
     # Script validation — retry once with stronger instruction if wrong script
     if language != "en" and text and not _has_correct_script(text, language):
         stronger = f"IMPORTANT: Your ENTIRE response must be in {LANGUAGE_NAMES[language]} script only.\n\n" + prompt
-        text = _call(client, stronger, max_tokens)
+        text = _call(stronger, max_tokens)
 
     return text
 
