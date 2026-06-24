@@ -2,15 +2,15 @@
   "rag_no_region": {
     "n": 20,
     "n_regional": 16,
-    "region_hit5": 0.75,
-    "top1_region": 0.562,
-    "mrr_state": 0.664
+    "region_hit5": 0.5,
+    "top1_region": 0.312,
+    "mrr_state": 0.38
   },
   "rag_with_region": {
     "n": 20,
     "n_regional": 16,
     "region_hit5": 1.0,
-    "top1_region": 1.0,
-    "mrr_state": 1.0
+    "top1_region": 0.938,
+    "mrr_state": 0.969
   }
 }
