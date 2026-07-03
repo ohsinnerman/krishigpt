@@ -1,0 +1,22 @@
+[Unit]
+Description=KrishiGPT FastAPI backend
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/krishigpt/backend
+# .env holds GOOGLE_API_KEY / GROQ_API_KEY / GREENAPI_* etc.
+EnvironmentFile=/home/ubuntu/krishigpt/backend/.env
+# Single worker: the embedding model + FAISS index must stay in one process,
+# and a t3.micro cannot afford multiple copies in RAM.
+ExecStart=/home/ubuntu/krishigpt/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+# Give the model time to load on a slow instance before systemd gives up.
+TimeoutStartSec=180
+# Cap memory so a runaway can't take down the whole box; systemd restarts it.
+MemoryMax=900M
+
+[Install]
+WantedBy=multi-user.target

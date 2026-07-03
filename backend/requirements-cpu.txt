@@ -1,0 +1,20 @@
+# CPU-only deps for low-RAM deployment (t3.micro). Install with:
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch
+#   pip install -r requirements-cpu.txt
+# The torch CPU wheel is ~200MB vs ~800MB+ for the default CUDA build,
+# which matters a lot on a 1 GB instance.
+
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.7.0
+python-dotenv>=1.0.1
+
+google-genai>=1.0.0
+groq>=0.11.0
+sentence-transformers>=3.0.0
+faiss-cpu>=1.8.0
+numpy>=1.26.0
+
+langdetect>=1.0.9
+httpx>=0.27.0
+slowapi>=0.1.9

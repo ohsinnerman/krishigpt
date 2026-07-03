@@ -1,0 +1,15 @@
+# Replace api.yourdomain.com with the (sub)domain whose DNS A-record points at
+# this EC2 instance's public IP. Caddy will auto-provision a free Let's Encrypt
+# HTTPS certificate for it on first run.
+
+api.yourdomain.com {
+    encode gzip
+
+    reverse_proxy 127.0.0.1:8000 {
+        # LLM calls can take several seconds; don't cut them off.
+        transport http {
+            read_timeout 60s
+            write_timeout 60s
+        }
+    }
+}
