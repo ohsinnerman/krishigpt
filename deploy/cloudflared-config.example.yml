@@ -1,0 +1,17 @@
+# Cloudflare Tunnel config for KrishiGPT.
+# Copy to ~/.cloudflared/config.yml on the EC2 instance and fill in the two
+# placeholders that `cloudflared tunnel create krishigpt` prints/creates.
+#
+#   <TUNNEL_UUID>  -> the id shown by `cloudflared tunnel create krishigpt`
+#                     (also the .json credentials filename in ~/.cloudflared/)
+#   <HOSTNAME>     -> the public hostname you route to this tunnel, e.g.
+#                     krishigpt-api.<your-cf-domain>  (with a domain on Cloudflare)
+
+tunnel: <TUNNEL_UUID>
+credentials-file: /home/ubuntu/.cloudflared/<TUNNEL_UUID>.json
+
+ingress:
+  - hostname: <HOSTNAME>
+    service: http://localhost:8000
+  # everything else -> 404
+  - service: http_status:404

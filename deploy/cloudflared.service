@@ -1,0 +1,15 @@
+[Unit]
+Description=Cloudflare Tunnel for KrishiGPT backend
+After=network.target krishigpt.service
+
+[Service]
+Type=simple
+User=ubuntu
+# Runs the named tunnel created with `cloudflared tunnel create krishigpt`.
+# The tunnel routes your Cloudflare hostname -> http://localhost:8000 (see config.yml).
+ExecStart=/usr/local/bin/cloudflared tunnel run krishigpt
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

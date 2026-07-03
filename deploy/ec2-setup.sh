@@ -58,20 +58,23 @@ sleep 8
 sudo systemctl --no-pager status krishigpt | head -20 || true
 curl -s http://127.0.0.1:8000/health || echo "(health not ready yet — check: journalctl -u krishigpt -f)"
 
-echo "==> [7/8] Caddy (auto-HTTPS reverse proxy)"
-if ! command -v caddy >/dev/null 2>&1; then
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-  sudo apt-get update -y && sudo apt-get install -y caddy
-fi
+echo "==> [7/8] Public HTTPS"
 if [ -n "$DOMAIN" ]; then
+  # Domain provided -> Caddy auto-HTTPS reverse proxy (needs ports 80/443 open + DNS -> this IP).
+  if ! command -v caddy >/dev/null 2>&1; then
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+    sudo apt-get update -y && sudo apt-get install -y caddy
+  fi
   sudo sed "s/api.yourdomain.com/$DOMAIN/" "$REPO/deploy/Caddyfile" | sudo tee /etc/caddy/Caddyfile >/dev/null
   sudo systemctl restart caddy
   echo "Caddy serving https://$DOMAIN -> 127.0.0.1:8000"
 else
-  echo "No domain passed; skipping Caddy config. Re-run: bash deploy/ec2-setup.sh api.yourdomain.com"
+  echo "No domain passed -> Caddy skipped."
+  echo "Use a Cloudflare Tunnel for a public HTTPS URL (no Elastic IP / domain needed):"
+  echo "  see deploy/DEPLOY-cloudflare.md"
 fi
 
 echo "==> [8/8] Done."
-echo "Backend logs:  journalctl -u krishigpt -f"
-echo "Test:          curl https://${DOMAIN:-<domain>}/health"
+echo "Backend health (local):  curl http://127.0.0.1:8000/health"
+echo "Backend logs:            journalctl -u krishigpt -f"
