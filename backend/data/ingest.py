@@ -5,8 +5,9 @@ Usage: python -m data.ingest --corpus-dir data/corpus --output-dir data
 import os, sys, argparse, re, uuid
 from pathlib import Path
 
-import fitz  # PyMuPDF
 from langdetect import detect, LangDetectException
+# NOTE: PyMuPDF (`fitz`) is imported lazily inside extract_text_from_pdf() so the
+# ingester works without it when the corpus is HTML/TXT only (e.g. the seed docs).
 
 # Add parent (backend/) to path so `rag` and `data` import cleanly
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -52,6 +53,7 @@ AGRO_ZONES = {
 # ── Text extraction ────────────────────────────────────────────────────────────
 
 def extract_text_from_pdf(path: str) -> str:
+    import fitz  # PyMuPDF — only needed when a real PDF is in the corpus
     doc = fitz.open(path)
     pages = []
     for page in doc:

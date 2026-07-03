@@ -15,6 +15,18 @@ REPO="/home/ubuntu/krishigpt"
 BACKEND="$REPO/backend"
 VENV="$REPO/.venv"
 
+echo "==> [0/8] Disk space preflight"
+AVAIL_GB=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
+echo "Free space on / : ${AVAIL_GB} GB"
+if [ "${AVAIL_GB:-0}" -lt 6 ]; then
+  echo "!! Less than 6 GB free on /. Grow the EBS volume to >=15 GB, then:"
+  echo "!!   lsblk ; sudo growpart /dev/nvme0n1 1 ; sudo resize2fs /dev/nvme0n1p1"
+  echo "!! (device may be /dev/xvda instead). Then re-run this script."
+  exit 1
+fi
+# NOTE: pip temp/cache are redirected to the real disk in step [3] because /tmp
+# is a small RAM-backed tmpfs that overflows when unpacking the torch wheel.
+
 echo "==> [1/8] Swap (critical: t3.micro has only 1 GB RAM)"
 if [ ! -f /swapfile ]; then
   sudo fallocate -l 3G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=3072
@@ -33,11 +45,20 @@ sudo apt-get update -y
 sudo apt-get install -y python3-venv python3-pip build-essential debian-keyring debian-archive-keyring apt-transport-https curl
 
 echo "==> [3/8] Python venv + CPU-only torch + deps"
+# /tmp is a small RAM-backed tmpfs (~half of RAM). Unpacking the ~192MB torch
+# wheel there overflows it -> "[Errno 122] Disk quota exceeded". Redirect pip's
+# temp + cache to the real disk instead.
+export TMPDIR="$REPO/.pip-tmp"
+export PIP_CACHE_DIR="$REPO/.pip-cache"
+mkdir -p "$TMPDIR" "$PIP_CACHE_DIR"
+
 python3 -m venv "$VENV"
 "$VENV/bin/pip" install --upgrade pip
 # CPU-only torch wheel (~200MB vs ~800MB CUDA) — essential on 1 GB RAM.
 "$VENV/bin/pip" install --index-url https://download.pytorch.org/whl/cpu torch
 "$VENV/bin/pip" install -r "$BACKEND/requirements-cpu.txt"
+# Reclaim the download cache space once installed.
+rm -rf "$TMPDIR" "$PIP_CACHE_DIR"
 
 echo "==> [4/8] Build corpus + FAISS index"
 "$VENV/bin/python" "$REPO/scripts/download_corpus.py"
